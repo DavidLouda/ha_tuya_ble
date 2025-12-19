@@ -14,7 +14,7 @@ from homeassistant.const import UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+from homeassistant.components.bluetooth.passive_update_coordinator import PassiveBluetoothDataUpdateCoordinator
 
 from .const import (
     DOMAIN,
@@ -22,7 +22,7 @@ from .const import (
     FINGERBOT_MODE_PUSH,
     FINGERBOT_MODE_SWITCH,
 )
-from .devices import TuyaBLEData, TuyaBLEEntity, TuyaBLEProductInfo
+from .devices import TuyaBLEData, TuyaBLEEntity, TuyaBLEProductInfo, TuyaBLEPassiveCoordinator
 from .tuya_ble import TuyaBLEDataPointType, TuyaBLEDevice
 
 _LOGGER = logging.getLogger(__name__)
@@ -36,7 +36,7 @@ class TuyaBLESelectMapping:
     dp_type: TuyaBLEDataPointType | None = None
 
 
-@dataclass
+@dataclass(frozen=True)
 class TemperatureUnitDescription(SelectEntityDescription):
     key: str = "temperature_unit"
     icon: str = "mdi:thermometer"
@@ -51,7 +51,7 @@ class TuyaBLEFingerbotModeMapping(TuyaBLESelectMapping):
             entity_category=EntityCategory.CONFIG,
             options=
                 [
-                    FINGERBOT_MODE_PUSH, 
+                    FINGERBOT_MODE_PUSH,
                     FINGERBOT_MODE_SWITCH,
                     FINGERBOT_MODE_PROGRAM,
                 ],
@@ -82,15 +82,23 @@ mapping: dict[str, TuyaBLECategorySelectMapping] = {
             ],
         },
     ),
+    "kg": TuyaBLECategorySelectMapping(
+        products={
+            "riecov42": [  # Fingerbot - OPRAVENO dp_id
+                TuyaBLEFingerbotModeMapping(dp_id=101),  # OPRAVENO: 8 → 101
+            ],
+        },
+    ),
     "ms": TuyaBLECategorySelectMapping(
         products={
             **dict.fromkeys(
-                ["ludzroix", "isk2p555"], # Smart Lock
+                ["ludzroix", "isk2p555", "yy2bmcoh"], # Smart Lock
                 [
                     TuyaBLESelectMapping(
                         dp_id=31,
                         description=SelectEntityDescription(
                             key="beep_volume",
+                            icon="mdi:volume-high",
                             options=[
                                 "mute",
                                 "low",
@@ -99,9 +107,58 @@ mapping: dict[str, TuyaBLECategorySelectMapping] = {
                             ],
                             entity_category=EntityCategory.CONFIG,
                         ),
+                        dp_type=TuyaBLEDataPointType.DT_ENUM,
                     ),
                 ]
             ),
+            "mqc2hevy": [
+                TuyaBLESelectMapping(
+                    dp_id=31,
+                    description=SelectEntityDescription(
+                        key="beep_volume",
+                        icon="mdi:icon-volume-high",
+                        options=[
+                            "mute",
+                            "low",
+                            "normal",
+                            "high",
+                        ],
+                        entity_category=EntityCategory.CONFIG,
+                    ),
+                    dp_type=TuyaBLEDataPointType.DT_ENUM,
+                ),
+                TuyaBLESelectMapping(
+                    dp_id=28,
+                    description=SelectEntityDescription(
+                        key="language",
+                        icon="mdi:translate",
+                        options=[
+                            "chinese_simplified",
+                            "english",
+                            "japanese",
+                            "russian",
+                            "german",
+                            "spanish",
+                            "french",
+                            "korean"
+                        ],
+                        entity_category=EntityCategory.CONFIG,
+                    ),
+                    dp_type=TuyaBLEDataPointType.DT_ENUM,
+                ),
+                TuyaBLESelectMapping(
+                    dp_id=68,
+                    description=SelectEntityDescription(
+                        key="special_function",
+                        icon="mdi:tools",
+                        options=[
+                            "function1",
+                            "function2",
+                        ],
+                        entity_category=EntityCategory.CONFIG,
+                    ),
+                ),
+            ]
         }
     ),
     "szjqr": TuyaBLECategorySelectMapping(
@@ -116,7 +173,7 @@ mapping: dict[str, TuyaBLECategorySelectMapping] = {
                 [
                     "blliqpsj",
                     "ndvkgsrm",
-                    "yiihr7zh", 
+                    "yiihr7zh",
                     "neq16kgd"
                 ],  # Fingerbot Plus
                 [
@@ -146,33 +203,6 @@ mapping: dict[str, TuyaBLECategorySelectMapping] = {
                         ],
                         entity_registry_enabled_default=False,
                     )
-                ),
-            ],
-        },
-    ),
-    "znhsb": TuyaBLECategorySelectMapping(
-        products={
-            "cdlandip":  # Smart water bottle
-            [
-                TuyaBLESelectMapping(
-                    dp_id=106,
-                    description=TemperatureUnitDescription(
-                        options=[
-                            UnitOfTemperature.CELSIUS,
-                            UnitOfTemperature.FAHRENHEIT,
-                        ],
-                    )
-                ),
-                TuyaBLESelectMapping(
-                    dp_id=107,
-                    description=SelectEntityDescription(
-                        key="reminder_mode",
-                        options=[
-                            "interval_reminder",
-                            "schedule_reminder",
-                        ],
-                        entity_category=EntityCategory.CONFIG,
-                    ),
                 ),
             ],
         },
@@ -229,7 +259,7 @@ class TuyaBLESelect(TuyaBLEEntity, SelectEntity):
     def __init__(
         self,
         hass: HomeAssistant,
-        coordinator: DataUpdateCoordinator,
+        coordinator: TuyaBLEPassiveCoordinator,
         device: TuyaBLEDevice,
         product: TuyaBLEProductInfo,
         mapping: TuyaBLESelectMapping,
