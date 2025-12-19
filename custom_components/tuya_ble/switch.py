@@ -91,10 +91,23 @@ def set_fingerbot_program_repeat_forever(
         datapoint = self._device.datapoints[product.fingerbot.program]
         if datapoint and type(datapoint.value) is bytes:
             new_value = (
-                int.to_bytes(0xFFFF if value else 1, 2, "big") + 
+                int.to_bytes(0xFFFF if value else 1, 2, "big") +
                 datapoint.value[2:]
             )
             self._hass.create_task(datapoint.set_value(new_value))
+
+# --- Кастомные getter/setter для замка ---
+def lock_switch_setter(self: TuyaBLESwitch, product: TuyaBLEProductInfo, value: bool) -> None:
+    if value:
+        import base64
+        raw_value = base64.b64decode("AQE=")
+        datapoint = self._device.datapoints.get_or_create(6, TuyaBLEDataPointType.DT_RAW, raw_value)
+        if datapoint:
+            self._hass.create_task(datapoint.set_value(raw_value))
+    else:
+        datapoint = self._device.datapoints.get_or_create(46, TuyaBLEDataPointType.DT_BOOL, False)
+        if datapoint:
+            self._hass.create_task(datapoint.set_value(True))
 
 
 @dataclass
@@ -160,6 +173,51 @@ mapping: dict[str, TuyaBLECategorySwitchMapping] = {
             ],
         },
     ),
+    "ggq": TuyaBLECategorySwitchMapping(
+        products={
+            "6pahkcau": [  # Irrigation computer
+                TuyaBLESwitchMapping(
+                    dp_id=1,
+                    description=SwitchEntityDescription(
+                        key="water_valve",
+                        entity_registry_enabled_default=True,
+                    ),
+                ),
+            ],
+            "hfgdqhho": [  # Irrigation computer
+                TuyaBLESwitchMapping(
+                    dp_id=105,
+                    description=SwitchEntityDescription(
+                        key="water_valve_z1",
+                        entity_registry_enabled_default=True,
+                    ),
+                ),
+                TuyaBLESwitchMapping(
+                    dp_id=104,
+                    description=SwitchEntityDescription(
+                        key="water_valve_z2",
+                        entity_registry_enabled_default=True,
+                    ),
+                ),
+            ],
+        },
+    ),
+    "kg": TuyaBLECategorySwitchMapping(
+        products={
+            "riecov42": [ 
+                TuyaBLEFingerbotSwitchMapping(dp_id=1), 
+                TuyaBLEReversePositionsMapping(dp_id=104),  
+                TuyaBLESwitchMapping(
+                    dp_id=107, 
+                    description=SwitchEntityDescription(
+                        key="manual_control",
+                        icon="mdi:gesture-tap-box",
+                        entity_category=EntityCategory.CONFIG,
+                    ),
+                ),
+            ],
+        },
+    ),
     "ms": TuyaBLECategorySwitchMapping(
         products={
             **dict.fromkeys(
@@ -173,6 +231,17 @@ mapping: dict[str, TuyaBLECategorySwitchMapping] = {
                     ),
                 ]
             ),
+            "mqc2hevy":  # Smart Lock
+            [
+                TuyaBLESwitchMapping(
+                    dp_id=47,
+                    description=SwitchEntityDescription(
+                        key="lock_motor_state",
+                        icon="mdi:lock"
+                    ),
+                    setter=lock_switch_setter,
+                ),
+            ]
         }
     ),
     "szjqr": TuyaBLECategorySwitchMapping(
@@ -310,19 +379,6 @@ mapping: dict[str, TuyaBLECategorySwitchMapping] = {
                         icon="mdi:thermometer",
                         entity_category=EntityCategory.CONFIG,
                         entity_registry_enabled_default=False,
-                    ),
-                ),
-            ],
-        },
-    ),
-    "ggq": TuyaBLECategorySwitchMapping(
-        products={
-            "6pahkcau": [  # Irrigation computer
-                TuyaBLESwitchMapping(
-                    dp_id=1,
-                    description=SwitchEntityDescription(
-                        key="water_valve",
-                        entity_registry_enabled_default=True,
                     ),
                 ),
             ],
